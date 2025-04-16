@@ -16,8 +16,8 @@ class MainWindow:
         """
         self.root = tk.Tk()
         self.root.title(title)
-        self.root.geometry("1200x800")  # 增加窗口宽度以适应加密过程显示
-        self.root.minsize(1000, 500)
+        self.root.geometry("1000x800")
+        self.root.minsize(800, 500)
         
         # 回调函数
         self.on_send_message = None
@@ -25,7 +25,6 @@ class MainWindow:
         self.on_connect = None
         self.on_start_server = None
         self.on_disconnect = None
-        self.on_clear_process_log = None
         
         # 创建UI组件
         self._create_ui()
@@ -59,26 +58,22 @@ class MainWindow:
                         font=('Arial', 10),
                         padding=5)
         
-        # 加密过程样式
-        style.configure('Process.TLabel',
-                        font=('Arial', 10, 'bold'),
-                        foreground='#4a86e8')
+        # 加密过程显示样式
+        style.configure('Crypto.TLabel',
+                        font=('Courier New', 10),
+                        padding=3)
     
     def _create_ui(self):
         """
         创建UI组件
         """
-        # 创建主布局为左、中、右三个面板
+        # 创建主布局为左右两个面板
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # 左侧面板 (消息和状态)
         left_frame = ttk.Frame(main_paned)
         main_paned.add(left_frame, weight=3)
-        
-        # 中间面板 (加密解密过程)
-        middle_frame = ttk.Frame(main_paned)
-        main_paned.add(middle_frame, weight=2)
         
         # 右侧面板 (网络连接和文件传输)
         right_frame = ttk.Frame(main_paned)
@@ -91,6 +86,34 @@ class MainWindow:
         self.messages_text = scrolledtext.ScrolledText(left_frame, wrap=tk.WORD, height=15)
         self.messages_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         self.messages_text.config(state=tk.DISABLED)
+        
+        # 左侧中间：加密过程显示
+        crypto_label = ttk.Label(left_frame, text="DES加密/解密过程", style='Header.TLabel')
+        crypto_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        crypto_frame = ttk.LabelFrame(left_frame, text="加密/解密信息")
+        crypto_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # 原文显示
+        plaintext_frame = ttk.Frame(crypto_frame)
+        plaintext_frame.pack(fill=tk.X, padx=5, pady=3)
+        ttk.Label(plaintext_frame, text="原文:", width=10).pack(side=tk.LEFT)
+        self.plaintext_display = ttk.Label(plaintext_frame, text="", style='Crypto.TLabel')
+        self.plaintext_display.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 密钥显示
+        key_frame = ttk.Frame(crypto_frame)
+        key_frame.pack(fill=tk.X, padx=5, pady=3)
+        ttk.Label(key_frame, text="密钥:", width=10).pack(side=tk.LEFT)
+        self.key_display = ttk.Label(key_frame, text="", style='Crypto.TLabel')
+        self.key_display.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 密文显示
+        ciphertext_frame = ttk.Frame(crypto_frame)
+        ciphertext_frame.pack(fill=tk.X, padx=5, pady=3)
+        ttk.Label(ciphertext_frame, text="密文:", width=10).pack(side=tk.LEFT)
+        self.ciphertext_display = ttk.Label(ciphertext_frame, text="", style='Crypto.TLabel')
+        self.ciphertext_display.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # 左侧下方：消息输入和发送
         input_frame = ttk.Frame(left_frame)
@@ -119,32 +142,6 @@ class MainWindow:
         
         self.encryption_status = ttk.Label(status_frame, text="", style='Status.TLabel')
         self.encryption_status.pack(side=tk.RIGHT)
-        
-        # 中间面板：加密解密过程
-        process_label = ttk.Label(middle_frame, text="加密解密过程", style='Header.TLabel')
-        process_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        process_buttons_frame = ttk.Frame(middle_frame)
-        process_buttons_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        self.clear_process_button = ttk.Button(process_buttons_frame, text="清空日志", 
-                                             command=self._on_clear_process_log)
-        self.clear_process_button.pack(side=tk.RIGHT)
-        
-        # 加密过程显示区域
-        self.process_text = scrolledtext.ScrolledText(middle_frame, wrap=tk.WORD)
-        self.process_text.pack(fill=tk.BOTH, expand=True)
-        self.process_text.config(state=tk.DISABLED)
-        
-        # 添加文本标签
-        self.process_text.tag_configure("step", foreground="#4a86e8", font=("Arial", 10, "bold"))
-        self.process_text.tag_configure("info", foreground="#333333", font=("Arial", 9))
-        self.process_text.tag_configure("encryption", foreground="#009900", font=("Arial", 10, "bold"))
-        self.process_text.tag_configure("decryption", foreground="#990000", font=("Arial", 10, "bold"))
-        self.process_text.tag_configure("error", foreground="#ff0000", font=("Arial", 10, "bold"))
-        self.process_text.tag_configure("warning", foreground="#ff9900", font=("Arial", 10))
-        self.process_text.tag_configure("success", foreground="#009900", font=("Arial", 10))
-        self.process_text.tag_configure("timestamp", foreground="#666666", font=("Arial", 8))
         
         # 右侧上方：连接设置
         connection_label = ttk.Label(right_frame, text="连接设置", style='Header.TLabel')
@@ -282,58 +279,51 @@ class MainWindow:
             if self.on_disconnect:
                 self.on_disconnect()
     
-    def _on_clear_process_log(self):
-        """
-        清空加密解密过程日志
-        """
-        self.process_text.config(state=tk.NORMAL)
-        self.process_text.delete("1.0", tk.END)
-        self.process_text.config(state=tk.DISABLED)
-        
-        if self.on_clear_process_log:
-            self.on_clear_process_log()
-    
     def _update_ui_state(self, connected):
         """
         更新UI状态
         :param connected: 是否已连接
         """
         if connected:
-            self.connect_button.config(text="断开", style='Primary.TButton', state=tk.NORMAL)
             self.send_button.config(state=tk.NORMAL)
             self.send_file_button.config(state=tk.NORMAL)
+            self.connect_button.config(text="断开", state=tk.NORMAL)
             
             # 禁用连接设置
-            self._update_radiobuttons_state(self.root, tk.DISABLED)
             self.host_entry.config(state=tk.DISABLED)
             self.port_entry.config(state=tk.DISABLED)
+            
+            # 禁用角色选择按钮
+            self._update_radiobuttons_state(self.root, tk.DISABLED)
         else:
-            self.connect_button.config(text="连接", style='Primary.TButton', state=tk.NORMAL)
             self.send_button.config(state=tk.DISABLED)
             self.send_file_button.config(state=tk.DISABLED)
+            self.connect_button.config(text="连接", state=tk.NORMAL)
             
             # 启用连接设置
-            self._update_radiobuttons_state(self.root, tk.NORMAL)
             self.host_entry.config(state=tk.NORMAL)
             self.port_entry.config(state=tk.NORMAL)
+            
+            # 启用角色选择按钮
+            self._update_radiobuttons_state(self.root, tk.NORMAL)
     
     def _update_radiobuttons_state(self, parent, state):
         """
-        更新单选按钮状态
-        :param parent: 父容器
-        :param state: 状态
+        递归更新所有Radiobutton的状态
+        :param parent: 父组件
+        :param state: 要设置的状态
         """
+        # 检查当前组件的所有子组件
         for child in parent.winfo_children():
             if isinstance(child, ttk.Radiobutton):
                 child.config(state=state)
-            else:
-                self._update_radiobuttons_state(child, state)
+            # 递归检查子组件的子组件
+            self._update_radiobuttons_state(child, state)
     
     def show(self):
         """
         显示主窗口
         """
-        # 启动消息循环
         self.root.mainloop()
     
     def set_connected(self, connected):
@@ -407,44 +397,6 @@ class MainWindow:
             count = int(self.encryption_info.item("recv_files", "values")[0]) + 1
             self.encryption_info.item("recv_files", values=[str(count)])
     
-    def add_process_log(self, step_name, step_info="", is_encryption=True):
-        """
-        添加加密解密过程日志
-        :param step_name: 步骤名称
-        :param step_info: 步骤信息
-        :param is_encryption: 是否为加密过程(True为加密，False为解密)
-        """
-        self.process_text.config(state=tk.NORMAL)
-        
-        # 添加时间戳
-        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        self.process_text.insert(tk.END, f"[{timestamp}] ", "timestamp")
-        
-        # 根据步骤类型选择标签
-        if "错误" in step_name or "失败" in step_name:
-            step_tag = "error"
-        elif "警告" in step_name:
-            step_tag = "warning"
-        elif "完成" in step_name:
-            step_tag = "success"
-        elif is_encryption:
-            step_tag = "encryption"
-        else:
-            step_tag = "decryption"
-            
-        # 插入步骤名称
-        self.process_text.insert(tk.END, f"{step_name}: ", step_tag)
-        
-        # 插入步骤信息
-        if step_info:
-            self.process_text.insert(tk.END, f"{step_info}\n", "info")
-        else:
-            self.process_text.insert(tk.END, "\n")
-        
-        # 自动滚动到底部
-        self.process_text.see(tk.END)
-        self.process_text.config(state=tk.DISABLED)
-    
     def set_key_exchange_status(self, completed):
         """
         设置密钥交换状态
@@ -504,4 +456,52 @@ class MainWindow:
         设置加密状态信息
         :param status: 状态信息
         """
-        self.encryption_status.config(text=status) 
+        self.encryption_status.config(text=status)
+    
+    def update_crypto_display(self, plaintext, key, ciphertext, is_encrypting=True):
+        """
+        更新加密/解密过程显示
+        :param plaintext: 原文 (字符串或字节)
+        :param key: 密钥 (字符串或字节)
+        :param ciphertext: 密文 (字节)
+        :param is_encrypting: 是否为加密过程 (True为加密, False为解密)
+        """
+        # 将字节转换为可显示的十六进制
+        def to_display_format(data):
+            if isinstance(data, bytes):
+                # 将字节转换为十六进制
+                hex_data = data.hex()
+                # 每两个字符添加一个空格，使其更易读
+                formatted = ' '.join(hex_data[i:i+2] for i in range(0, len(hex_data), 2))
+                # 如果太长，截断并添加省略号
+                if len(formatted) > 50:
+                    return formatted[:47] + "..."
+                return formatted
+            elif isinstance(data, str):
+                # 如果是字符串，显示前25个字符
+                if len(data) > 25:
+                    return data[:22] + "..."
+                return data
+            return str(data)
+            
+        # 更新显示
+        operation = "加密" if is_encrypting else "解密"
+        
+        self.plaintext_display.config(text=to_display_format(plaintext))
+        self.key_display.config(text=to_display_format(key))
+        self.ciphertext_display.config(text=to_display_format(ciphertext))
+        
+        # 也可以在消息区域显示加密/解密操作信息
+        self.add_system_message(f"执行{operation}操作 - 原文长度: {len(plaintext)} 字节, 密文长度: {len(ciphertext)} 字节")
+    
+    def add_system_message(self, message):
+        """
+        添加系统消息到消息显示区域
+        :param message: 系统消息内容
+        """
+        time_str = datetime.now().strftime('%H:%M:%S')
+        
+        self.messages_text.config(state=tk.NORMAL)
+        self.messages_text.insert(tk.END, f"[{time_str}] 系统: {message}\n")
+        self.messages_text.see(tk.END)
+        self.messages_text.config(state=tk.DISABLED) 

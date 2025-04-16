@@ -138,25 +138,8 @@ class DESCipher:
             self.key = self.key[:8]
             
         # 生成16轮子密钥
-        self.process_callback = None  # 初始化回调函数
         self.sub_keys = self.__generate_sub_keys()
         self.block_size = 8  # DES块大小为8字节
-        
-    def set_process_callback(self, callback):
-        """
-        设置过程回调函数，用于显示加密解密过程
-        :param callback: 回调函数，接收(step_name, step_info)参数
-        """
-        self.process_callback = callback
-
-    def __notify_process(self, step_name, step_info=""):
-        """
-        通知过程回调函数
-        :param step_name: 步骤名称
-        :param step_info: 步骤信息
-        """
-        if self.process_callback:
-            self.process_callback(step_name, step_info)
 
     def __str_to_bit_array(self, text):
         """
@@ -217,11 +200,9 @@ class DESCipher:
         """
         # 将密钥转换为比特数组
         key_bits = self.__str_to_bit_array(self.key)
-        self.__notify_process("子密钥生成", f"密钥: {self.key.hex()}")
         
         # PC-1置换，将64位密钥变为56位
         key_56 = self.__permute(key_bits, self.__PC_1)
-        self.__notify_process("PC-1置换", f"56位密钥: {''.join(str(bit) for bit in key_56[:8])}...")
         
         # 分为左右两部分，各28位
         left, right = key_56[:28], key_56[28:]
@@ -240,25 +221,20 @@ class DESCipher:
             sub_key = self.__permute(combined, self.__PC_2)
             sub_keys.append(sub_key)
             
-            self.__notify_process(f"生成子密钥 #{i+1}", f"移位: {self.__SHIFT[i]}位, 长度: {len(sub_key)}位")
-            
         return sub_keys
 
-    def __f_function(self, right, sub_key, round_num=0):
+    def __f_function(self, right, sub_key):
         """
         DES的F函数
         :param right: 输入数据右半部分(32位)
         :param sub_key: 子密钥(48位)
-        :param round_num: 当前轮数(用于显示)
         :return: F函数输出(32位)
         """
         # 扩展置换，将32位扩展到48位
         expanded = self.__permute(right, self.__E)
-        self.__notify_process(f"第{round_num+1}轮 - 扩展置换", f"32位 -> 48位")
         
         # 与子密钥进行异或
         xored = self.__xor(expanded, sub_key)
-        self.__notify_process(f"第{round_num+1}轮 - 密钥异或", f"子密钥长度: {len(sub_key)}位")
         
         # S盒替代，将48位压缩为32位
         sbox_output = []
@@ -275,14 +251,9 @@ class DESCipher:
             
             # 将输出值转换为比特
             sbox_output.extend([int(bit) for bit in bin(val)[2:].zfill(4)])
-            
-        self.__notify_process(f"第{round_num+1}轮 - S盒替代", f"48位 -> 32位")
         
         # P置换
-        result = self.__permute(sbox_output, self.__P)
-        self.__notify_process(f"第{round_num+1}轮 - P置换", f"32位输出")
-        
-        return result
+        return self.__permute(sbox_output, self.__P)
 
     def __des_encrypt_block(self, block, decrypt=False):
         """
@@ -291,19 +262,14 @@ class DESCipher:
         :param decrypt: 是否为解密模式
         :return: 加密/解密后的块
         """
-        mode = "解密" if decrypt else "加密"
-        self.__notify_process(f"开始{mode}块", f"块大小: {len(block)}字节")
-        
         # 将块转换为比特数组
         block = self.__str_to_bit_array(block)
         
         # 初始置换
         block = self.__permute(block, self.__IP)
-        self.__notify_process("初始置换IP", f"64位数据")
         
         # 分为左右两部分，各32位
         left, right = block[:32], block[32:]
-        self.__notify_process("数据分块", f"左: 32位, 右: 32位")
         
         # 16轮Feistel网络
         for i in range(16):
@@ -317,23 +283,16 @@ class DESCipher:
             left = right
             
             # 右半部分等于原来的左半部分与F函数输出的异或
-            right = self.__xor(old_left, self.__f_function(right, self.sub_keys[key_index], i))
-            
-            self.__notify_process(f"第{i+1}轮Feistel完成", f"使用子密钥 #{key_index+1}")
+            right = self.__xor(old_left, self.__f_function(right, self.sub_keys[key_index]))
         
         # 合并左右两部分(交换左右位置)
         result = right + left
-        self.__notify_process("合并左右数据", f"交换左右位置")
         
         # 逆初始置换
         result = self.__permute(result, self.__IP_1)
-        self.__notify_process("逆初始置换IP^-1", f"64位数据")
         
         # 将比特数组转换为字节
-        output = self.__bit_array_to_str(result)
-        self.__notify_process(f"完成{mode}块", f"输出: {len(output)}字节")
-        
-        return output
+        return self.__bit_array_to_str(result)
 
     def __pad(self, data):
         """
@@ -343,9 +302,7 @@ class DESCipher:
         """
         pad_len = self.block_size - (len(data) % self.block_size)
         padding = bytes([pad_len]) * pad_len
-        padded = data + padding
-        self.__notify_process("PKCS#5填充", f"原始长度: {len(data)}字节, 填充后: {len(padded)}字节, 填充字节: {pad_len}")
-        return padded
+        return data + padding
 
     def __unpad(self, data):
         """
@@ -355,16 +312,11 @@ class DESCipher:
         """
         pad_len = data[-1]
         if pad_len > self.block_size or pad_len == 0:
-            self.__notify_process("移除填充失败", f"无效的填充长度: {pad_len}")
             return None  # 无效填充
         for i in range(1, pad_len + 1):
             if data[-i] != pad_len:
-                self.__notify_process("移除填充失败", f"填充内容不一致")
                 return None  # 无效填充
-                
-        unpadded = data[:-pad_len]
-        self.__notify_process("移除PKCS#5填充", f"移除 {pad_len} 字节填充, 原始长度: {len(unpadded)}字节")
-        return unpadded
+        return data[:-pad_len]
 
     def encrypt(self, data):
         """
@@ -374,8 +326,6 @@ class DESCipher:
         """
         # 生成随机IV
         iv = os.urandom(8)
-        self.__notify_process("开始加密", f"数据长度: {len(data)}字节, 使用CBC模式")
-        self.__notify_process("生成IV", f"IV: {iv.hex()}")
         
         # 记录开始时间
         start_time = time.time()
@@ -387,19 +337,12 @@ class DESCipher:
         result = bytearray()
         prev_block = iv  # 第一块使用IV作为前一个密文块
         
-        total_blocks = len(padded_data) // self.block_size
-        self.__notify_process("CBC模式加密", f"共 {total_blocks} 个块")
-        
         for i in range(0, len(padded_data), self.block_size):
             # 获取当前块
             block = padded_data[i:i+self.block_size]
-            block_num = i // self.block_size + 1
-            
-            self.__notify_process(f"处理块 #{block_num}/{total_blocks}", f"块大小: {len(block)}字节")
             
             # CBC模式：当前明文块与前一个密文块进行异或
             xored_block = bytes(a ^ b for a, b in zip(block, prev_block))
-            self.__notify_process(f"CBC异或 #{block_num}", f"明文块 XOR 前一密文块")
             
             # 加密
             encrypted_block = self.__des_encrypt_block(xored_block)
@@ -409,17 +352,12 @@ class DESCipher:
             
             # 更新前一个密文块
             prev_block = encrypted_block
-            
-            self.__notify_process(f"块 #{block_num} 加密完成", f"输出长度: {len(encrypted_block)}字节")
         
         # 计算加密时间
         encryption_time = time.time() - start_time
         
-        output = bytes(iv + result)
-        self.__notify_process("加密完成", f"总耗时: {encryption_time:.6f}秒, 输出长度: {len(output)}字节")
-        
         # 返回IV + 加密数据以及加密时间
-        return output, encryption_time
+        return bytes(iv + result), encryption_time
 
     def decrypt(self, data):
         """
@@ -431,9 +369,6 @@ class DESCipher:
         iv = data[:8]
         encrypted_data = data[8:]
         
-        self.__notify_process("开始解密", f"数据长度: {len(data)}字节, 使用CBC模式")
-        self.__notify_process("提取IV", f"IV: {iv.hex()}")
-        
         # 记录开始时间
         start_time = time.time()
         
@@ -441,47 +376,33 @@ class DESCipher:
         result = bytearray()
         prev_block = iv  # 第一块使用IV作为前一个密文块
         
-        total_blocks = len(encrypted_data) // self.block_size
-        self.__notify_process("CBC模式解密", f"共 {total_blocks} 个块")
-        
         for i in range(0, len(encrypted_data), self.block_size):
             # 获取当前密文块
             block = encrypted_data[i:i+self.block_size]
-            block_num = i // self.block_size + 1
-            
-            self.__notify_process(f"处理块 #{block_num}/{total_blocks}", f"块大小: {len(block)}字节")
             
             # 解密
             decrypted_block = self.__des_encrypt_block(block, decrypt=True)
             
             # CBC模式：解密结果与前一个密文块进行异或
             xored_block = bytes(a ^ b for a, b in zip(decrypted_block, prev_block))
-            self.__notify_process(f"CBC异或 #{block_num}", f"解密结果 XOR 前一密文块")
             
             # 保存解密结果
             result.extend(xored_block)
             
             # 更新前一个密文块
             prev_block = block
-            
-            self.__notify_process(f"块 #{block_num} 解密完成", f"输出长度: {len(xored_block)}字节")
         
         # 去除填充
         try:
             unpadded_data = self.__unpad(result)
             if unpadded_data is None:
-                self.__notify_process("解密失败", "无效的PKCS#5填充")
                 raise ValueError("Invalid padding")
-        except Exception as e:
+        except:
             # 如果解密过程出错，返回None
-            self.__notify_process("解密错误", f"错误: {str(e)}")
             unpadded_data = None
         
         # 计算解密时间
         decryption_time = time.time() - start_time
-        
-        if unpadded_data is not None:
-            self.__notify_process("解密完成", f"总耗时: {decryption_time:.6f}秒, 输出长度: {len(unpadded_data)}字节")
         
         return unpadded_data, decryption_time
     
