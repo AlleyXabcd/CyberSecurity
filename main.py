@@ -30,6 +30,7 @@ class Application:
         self.window.on_connect = self.connect_to_server
         self.window.on_start_server = self.start_server
         self.window.on_disconnect = self.disconnect
+        self.window.on_clear_process_log = self.clear_process_log
         
         # 初始化网络、加密组件
         self.network = None
@@ -51,6 +52,26 @@ class Application:
         运行应用程序
         """
         self.window.show()
+    
+    def clear_process_log(self):
+        """
+        清空加密解密过程日志
+        """
+        pass  # 只需清空UI中的日志，无需其他操作
+    
+    def _des_process_callback(self, step_name, step_info=""):
+        """
+        DES加密/解密过程回调函数
+        :param step_name: 步骤名称
+        :param step_info: 步骤信息
+        """
+        # 判断是加密还是解密过程
+        is_encryption = True
+        if "解密" in step_name or "移除填充" in step_name:
+            is_encryption = False
+            
+        # 添加到UI日志
+        self.window.add_process_log(step_name, step_info, is_encryption)
     
     def start_server(self, host, port):
         """
@@ -162,8 +183,16 @@ class Application:
         # 生成共享密钥
         shared_secret = self.dh.generate_shared_secret(public_key)
         
+        # 添加到加密过程日志
+        self.window.add_process_log("Diffie-Hellman密钥交换", 
+                                   f"生成共享密钥: {shared_secret[:8].hex()}...", 
+                                   True)
+        
         # 创建DES加密器
         self.des = DESCipher(shared_secret)
+        
+        # 设置加密解密过程回调
+        self.des.set_process_callback(self._des_process_callback)
         
         # 标记密钥交换完成
         self.key_exchange_completed = True
@@ -182,6 +211,9 @@ class Application:
             return
         
         try:
+            # 记录接收信息
+            self.window.add_process_log("接收加密消息", f"长度: {len(encrypted_data)}字节", False)
+            
             # 解密消息
             decrypted_data, decryption_time = self.des.decrypt(encrypted_data)
             
@@ -213,6 +245,13 @@ class Application:
             return
         
         try:
+            # 记录接收信息
+            self.window.add_process_log(
+                "接收加密文件", 
+                f"文件: {file_info['name']}, 加密长度: {len(encrypted_data)}字节", 
+                False
+            )
+            
             # 解密文件数据
             decrypted_data, decryption_time = self.des.decrypt(encrypted_data)
             
@@ -271,6 +310,9 @@ class Application:
             return
         
         try:
+            # 添加到加密过程日志
+            self.window.add_process_log("准备发送消息", f"内容长度: {len(message)}字符", True)
+            
             # 编码消息
             message_bytes = message.encode('utf-8')
             
@@ -285,6 +327,13 @@ class Application:
                 # 记录加密时间
                 self.encryption_times.append((len(message_bytes), encryption_time))
                 self._update_encryption_rate()
+                
+                # 记录发送信息
+                self.window.add_process_log(
+                    "消息发送完成", 
+                    f"原始长度: {len(message_bytes)}字节, 加密长度: {len(encrypted_data)}字节", 
+                    True
+                )
             else:
                 self.window.show_error("错误", "发送消息失败")
                 
@@ -305,6 +354,17 @@ class Application:
             return
         
         try:
+            # 获取文件大小和名称
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path)
+            
+            # 添加到加密过程日志
+            self.window.add_process_log(
+                "准备发送文件", 
+                f"文件: {file_name}, 大小: {file_size}字节", 
+                True
+            )
+            
             # 读取文件
             with open(file_path, 'rb') as f:
                 file_data = f.read()
@@ -315,12 +375,18 @@ class Application:
             # 发送加密文件
             if self.network.send_encrypted_file(file_path, encrypted_data):
                 # 更新UI
-                file_name = os.path.basename(file_path)
                 self.window.add_file_transfer(file_name, len(file_data), is_sent=True)
                 
                 # 记录加密时间
                 self.encryption_times.append((len(file_data), encryption_time))
                 self._update_encryption_rate()
+                
+                # 记录发送信息
+                self.window.add_process_log(
+                    "文件发送完成", 
+                    f"原始大小: {len(file_data)}字节, 加密大小: {len(encrypted_data)}字节", 
+                    True
+                )
             else:
                 self.window.show_error("错误", "发送文件失败")
                 
