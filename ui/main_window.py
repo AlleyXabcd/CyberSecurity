@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog, messagebox
+from tkinter import ttk, scrolledtext, filedialog, messagebox, Toplevel
 import os
 import threading
 import time
@@ -87,9 +87,20 @@ class MainWindow:
         self.messages_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         self.messages_text.config(state=tk.DISABLED)
         
+        # 初始化消息文本区域的标签样式
+        self._setup_message_tags()
+        
         # 左侧中间：加密过程显示
-        crypto_label = ttk.Label(left_frame, text="DES加密/解密过程", style='Header.TLabel')
-        crypto_label.pack(anchor=tk.W, pady=(0, 5))
+        crypto_label_frame = ttk.Frame(left_frame)
+        crypto_label_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        crypto_label = ttk.Label(crypto_label_frame, text="DES加密/解密过程", style='Header.TLabel')
+        crypto_label.pack(side=tk.LEFT)
+        
+        # 添加详情按钮
+        self.details_button = ttk.Button(crypto_label_frame, text="查看详情", 
+                                       command=self._show_crypto_details)
+        self.details_button.pack(side=tk.RIGHT)
         
         crypto_frame = ttk.LabelFrame(left_frame, text="加密/解密信息")
         crypto_frame.pack(fill=tk.X, pady=(0, 10))
@@ -114,6 +125,14 @@ class MainWindow:
         ttk.Label(ciphertext_frame, text="密文:", width=10).pack(side=tk.LEFT)
         self.ciphertext_display = ttk.Label(ciphertext_frame, text="", style='Crypto.TLabel')
         self.ciphertext_display.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 初始化加密数据存储
+        self._current_crypto_data = {
+            'plaintext': b'',
+            'key': b'',
+            'ciphertext': b'',
+            'is_encrypting': True
+        }
         
         # 左侧下方：消息输入和发送
         input_frame = ttk.Frame(left_frame)
@@ -350,10 +369,31 @@ class MainWindow:
         
         # 添加时间戳和发送方向
         timestamp = datetime.now().strftime("%H:%M:%S")
-        prefix = f"[{timestamp}] {'发送' if is_sent else '接收'}: "
         
-        self.messages_text.insert(tk.END, prefix, "bold")
-        self.messages_text.insert(tk.END, message + "\n\n")
+        # 在新行开始
+        if self.messages_text.index('end-1c') != '1.0':
+            self.messages_text.insert(tk.END, "\n")
+        
+        # 添加时间戳
+        self.messages_text.insert(tk.END, f"[{timestamp}] ", "timestamp")
+        
+        # 添加发送/接收标签
+        if is_sent:
+            self.messages_text.insert(tk.END, "发送: ", "sent")
+            bubble_tag = "sent_bubble"
+            content_tag = "sent_content"
+        else:
+            self.messages_text.insert(tk.END, "接收: ", "received")
+            bubble_tag = "received_bubble"
+            content_tag = "received_content"
+        
+        # 添加消息内容，使用气泡背景
+        content_start = self.messages_text.index(tk.END)
+        self.messages_text.insert(tk.END, f"{message}", content_tag)
+        content_end = self.messages_text.index(tk.END)
+        
+        # 应用气泡背景
+        self.messages_text.tag_add(bubble_tag, content_start, content_end)
         
         # 自动滚动到底部
         self.messages_text.see(tk.END)
@@ -466,6 +506,14 @@ class MainWindow:
         :param ciphertext: 密文 (字节)
         :param is_encrypting: 是否为加密过程 (True为加密, False为解密)
         """
+        # 保存完整的数据用于详情视图
+        self._current_crypto_data = {
+            'plaintext': plaintext,
+            'key': key,
+            'ciphertext': ciphertext,
+            'is_encrypting': is_encrypting
+        }
+        
         # 将字节转换为可显示的十六进制
         def to_display_format(data):
             if isinstance(data, bytes):
@@ -502,6 +550,148 @@ class MainWindow:
         time_str = datetime.now().strftime('%H:%M:%S')
         
         self.messages_text.config(state=tk.NORMAL)
-        self.messages_text.insert(tk.END, f"[{time_str}] 系统: {message}\n")
+        
+        # 在新行开始
+        if self.messages_text.index('end-1c') != '1.0':
+            self.messages_text.insert(tk.END, "\n")
+        
+        # 添加系统消息
+        self.messages_text.insert(tk.END, f"[{time_str}] 系统: {message}", "system")
+        
         self.messages_text.see(tk.END)
-        self.messages_text.config(state=tk.DISABLED) 
+        self.messages_text.config(state=tk.DISABLED)
+    
+    def _setup_message_tags(self):
+        """
+        设置消息文本区域的标签样式
+        """
+        # 配置消息文本区域的标签样式
+        self.messages_text.tag_configure("sent", 
+                                       foreground="#0066cc", 
+                                       font=('Arial', 10, 'bold'))
+        self.messages_text.tag_configure("sent_content", 
+                                       foreground="#000000",
+                                       lmargin1=20,
+                                       lmargin2=20)
+        
+        self.messages_text.tag_configure("received", 
+                                       foreground="#006633", 
+                                       font=('Arial', 10, 'bold'))
+        self.messages_text.tag_configure("received_content", 
+                                       foreground="#000000",
+                                       lmargin1=20,
+                                       lmargin2=20)
+        
+        self.messages_text.tag_configure("system", 
+                                       foreground="#666666", 
+                                       font=('Arial', 9, 'italic'))
+        
+        self.messages_text.tag_configure("timestamp", 
+                                       foreground="#888888", 
+                                       font=('Arial', 8))
+        
+        # 创建消息气泡背景样式
+        self.messages_text.tag_configure("sent_bubble", 
+                                      background="#e6f2ff",
+                                      borderwidth=1,
+                                      relief=tk.SOLID)
+        
+        self.messages_text.tag_configure("received_bubble", 
+                                      background="#e6ffe6",
+                                      borderwidth=1,
+                                      relief=tk.SOLID)
+    
+    def _show_crypto_details(self):
+        """
+        显示加密/解密详情窗口
+        """
+        if not hasattr(self, '_current_crypto_data'):
+            return
+            
+        # 创建详情窗口
+        details_window = Toplevel(self.root)
+        details_window.title("加密/解密详情")
+        details_window.geometry("800x600")
+        details_window.minsize(600, 400)
+        
+        # 设置窗口为模态
+        details_window.grab_set()
+        
+        # 详情内容
+        main_frame = ttk.Frame(details_window, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 获取当前数据
+        data = self._current_crypto_data
+        operation = "加密" if data['is_encrypting'] else "解密"
+        
+        # 标题
+        ttk.Label(main_frame, text=f"DES {operation}详情", font=('Arial', 16, 'bold')).pack(pady=(0, 20))
+        
+        # 创建一个显示器函数
+        def create_display_area(parent, label_text, data, is_hex=False):
+            frame = ttk.LabelFrame(parent, text=label_text)
+            frame.pack(fill=tk.BOTH, expand=True, pady=5)
+            
+            text_area = scrolledtext.ScrolledText(frame, wrap=tk.WORD, height=6)
+            text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            
+            # 格式化并显示数据
+            display_text = ""
+            if is_hex and isinstance(data, bytes):
+                # 十六进制显示，每行16字节
+                hex_data = data.hex()
+                for i in range(0, len(hex_data), 32):
+                    if i > 0:
+                        display_text += "\n"
+                    chunk = hex_data[i:i+32]
+                    formatted = ' '.join(chunk[j:j+2] for j in range(0, len(chunk), 2))
+                    display_text += formatted
+                    
+                # 如果数据很少，不需要换行
+                if len(hex_data) <= 32:
+                    display_text = ' '.join(hex_data[i:i+2] for i in range(0, len(hex_data), 2))
+            elif isinstance(data, bytes):
+                try:
+                    # 尝试解码为文本
+                    display_text = data.decode('utf-8')
+                except UnicodeDecodeError:
+                    # 如果解码失败，显示十六进制
+                    hex_data = data.hex()
+                    for i in range(0, len(hex_data), 32):
+                        if i > 0:
+                            display_text += "\n"
+                        chunk = hex_data[i:i+32]
+                        formatted = ' '.join(chunk[j:j+2] for j in range(0, len(chunk), 2))
+                        display_text += formatted
+            else:
+                display_text = str(data)
+                
+            text_area.insert(tk.END, display_text)
+            text_area.config(state=tk.DISABLED)  # 设为只读
+        
+        # 原文显示区域
+        create_display_area(main_frame, "原文", data['plaintext'])
+        
+        # 密钥显示区域 (十六进制)
+        create_display_area(main_frame, "密钥 (十六进制)", data['key'], is_hex=True)
+        
+        # 密文显示区域 (十六进制)
+        create_display_area(main_frame, "密文 (十六进制)", data['ciphertext'], is_hex=True)
+        
+        # 统计信息
+        stats_frame = ttk.Frame(main_frame)
+        stats_frame.pack(fill=tk.X, pady=10)
+        
+        plaintext_len = len(data['plaintext'])
+        ciphertext_len = len(data['ciphertext'])
+        
+        ttk.Label(stats_frame, text=f"原文大小: {plaintext_len} 字节").pack(side=tk.LEFT, padx=10)
+        ttk.Label(stats_frame, text=f"密文大小: {ciphertext_len} 字节").pack(side=tk.LEFT, padx=10)
+        
+        if data['is_encrypting']:
+            overhead = ((ciphertext_len - plaintext_len) / plaintext_len) * 100 if plaintext_len > 0 else 0
+            ttk.Label(stats_frame, text=f"加密开销: {overhead:.2f}%").pack(side=tk.LEFT, padx=10)
+        
+        # 底部关闭按钮
+        ttk.Button(main_frame, text="关闭", command=details_window.destroy).pack(pady=10)

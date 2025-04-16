@@ -136,6 +136,7 @@ class DESCipher:
         # 如果密钥长度超过8字节，截取前8字节
         elif len(self.key) > 8:
             self.key = self.key[:8]
+        print(f'共享密钥：{self.key}')
             
         # 生成16轮子密钥
         self.sub_keys = self.__generate_sub_keys()

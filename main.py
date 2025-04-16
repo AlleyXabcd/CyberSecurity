@@ -70,7 +70,7 @@ class Application:
                 self.window.status_label.config(text="等待客户端连接...")
                 
                 # 初始化Diffie-Hellman
-                self.dh = DiffieHellman()
+                self.dh = DiffieHellman(23,5) # prime=23,gen=5
                 
                 # 更新UI状态
                 self.window.set_encryption_status("等待密钥交换...")
@@ -97,7 +97,7 @@ class Application:
             # 启动网络服务
             if self.network.start():
                 # 初始化Diffie-Hellman
-                self.dh = DiffieHellman()
+                self.dh = DiffieHellman(23,5)
                 
                 # 发送公钥
                 self.network.send_dh_public_key(self.dh.get_public_key())

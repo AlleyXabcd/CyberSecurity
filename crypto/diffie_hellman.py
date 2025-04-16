@@ -35,10 +35,11 @@ class DiffieHellman:
             
         # 生成私钥 (1 < private_key < prime-1)
         self.private_key = random.randint(2, self.prime - 2)
-        
+        print(f'私钥：{self.private_key}')
         # 计算公钥: public_key = generator^private_key mod prime
         self.public_key = pow(self.generator, self.private_key, self.prime)
-        
+        print(f'公钥：{self.public_key}')
+
     def generate_shared_secret(self, other_public_key):
         """
         使用对方的公钥生成共享密钥
