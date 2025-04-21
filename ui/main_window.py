@@ -498,13 +498,14 @@ class MainWindow:
         """
         self.encryption_status.config(text=status)
     
-    def update_crypto_display(self, plaintext, key, ciphertext, is_encrypting=True):
+    def update_crypto_display(self, plaintext, key, ciphertext, is_encrypting=True, show_system_message=True):
         """
         更新加密/解密过程显示
         :param plaintext: 原文 (字符串或字节)
         :param key: 密钥 (字符串或字节)
         :param ciphertext: 密文 (字节)
         :param is_encrypting: 是否为加密过程 (True为加密, False为解密)
+        :param show_system_message: 是否显示系统消息
         """
         # 保存完整的数据用于详情视图
         self._current_crypto_data = {
@@ -540,7 +541,8 @@ class MainWindow:
         self.ciphertext_display.config(text=to_display_format(ciphertext))
         
         # 也可以在消息区域显示加密/解密操作信息
-        self.add_system_message(f"执行{operation}操作 - 原文长度: {len(plaintext)} 字节, 密文长度: {len(ciphertext)} 字节")
+        if show_system_message:
+            self.add_system_message(f"执行{operation}操作 - 原文长度: {len(plaintext)} 字节, 密文长度: {len(ciphertext)} 字节")
     
     def add_system_message(self, message):
         """

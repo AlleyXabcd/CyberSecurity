@@ -172,8 +172,8 @@ class Application:
         self.window.set_key_exchange_status(True)
         self.window.set_encryption_status("密钥交换完成")
         
-        # 显示共享密钥信息
-        self.window.update_crypto_display("密钥交换完成", shared_secret, b"", is_encrypting=False)
+        # 显示共享密钥信息，但不显示系统消息
+        self.window.update_crypto_display("密钥交换完成", shared_secret, b"", is_encrypting=False, show_system_message=False)
     
     def _on_encrypted_message_received(self, encrypted_data):
         """
